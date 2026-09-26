@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Passcodes · ScreenLock Pro</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600&family=B612+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
@@ -119,6 +120,20 @@
     .pc-no-results { text-align: center; color: var(--text-dim); padding: 24px; display: none; }
     .pc-toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
     .pc-toolbar .btn-secondary { flex: 1 1 auto; white-space: nowrap; text-align: center; }
+    .qr-video-wrap { position: relative; width: 100%; max-width: 380px; margin: 0 auto 16px; border-radius: 18px; overflow: hidden; border: 2px solid var(--border); background: #000; }
+    .qr-video-wrap video { width: 100%; display: block; }
+    .qr-confirm-card { background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 10px; }
+    .qr-confirm-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(0,245,255,0.08); font-size: 0.95rem; }
+    .qr-confirm-row:last-child { border-bottom: none; }
+    .qr-confirm-row span { color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; font-size: 0.75rem; }
+    .qr-confirm-row b { color: var(--cyan); font-family: 'Orbitron', monospace; }
+    .qr-manual-row { display: flex; gap: 10px; margin-top: 10px; }
+    .qr-manual-row input { flex: 1; padding: 10px 14px; background: rgba(0,0,0,0.5); border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-family: 'B612 Mono', 'Orbitron', monospace; letter-spacing: 2px; outline: none; text-transform: uppercase; }
+    .qr-manual-row input:focus { border-color: var(--cyan); box-shadow: 0 0 8px var(--cyan-glow); }
+    .btn-success { background: linear-gradient(90deg, #00cc6a, var(--green)); color: #000; border: none; padding: 10px 24px; border-radius: 30px; cursor: pointer; font-family: 'Orbitron', monospace; font-size: 0.75rem; font-weight: 700; letter-spacing: 1px; transition: 0.2s; flex: 1 1 auto; }
+    .btn-success:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); padding: 10px 24px; border-radius: 30px; cursor: pointer; font-weight: 700; font-size: 0.75rem; letter-spacing: 1px; transition: 0.2s; flex: 1 1 auto; }
+    .btn-danger:hover { background: rgba(255,34,85,0.1); }
     @media (max-width: 720px) {
       body:has(#adminPanel:not([style*="display: none"])) { padding: 0; }
       #adminPanel { border-radius: 0; max-width: 100%; }
@@ -131,6 +146,7 @@
       .form-row, .form-row[style*="1fr 1fr 1fr"] { grid-template-columns: 1fr !important; gap: 10px; }
       .pc-toolbar .btn-secondary { flex: 1 1 calc(50% - 5px); font-size: 0.75rem; padding: 8px 10px; }
       .pc-toolbar .btn-secondary:first-child { flex: 1 1 100%; }
+      .qr-manual-row { flex-direction: column; }
       .pc-header { flex-wrap: wrap; padding: 10px 14px; }
       .pc-pills { width: 100%; }
       .earn-stats { grid-template-columns: repeat(2, 1fr); }
@@ -215,7 +231,7 @@
 </div>
 <div id="adminPanel" style="display: none;">
   <div class="ap-header"><div class="ap-title">⚙ PASSCODE · SCREENLOCK PRO</div><button class="ap-logout" id="logoutAdminBtn">LOGOUT</button></div>
-  <div class="ap-tabs"><button class="ap-tab active" data-tab="passcodes">Passcodes</button><button class="ap-tab" data-tab="earnings">Earnings</button><button class="ap-tab" data-tab="settings">Settings</button><button class="ap-tab" data-tab="users">Users</button></div>
+  <div class="ap-tabs"><button class="ap-tab active" data-tab="passcodes">Passcodes</button><button class="ap-tab" data-tab="scanqr">📷 Scan QR</button><button class="ap-tab" data-tab="earnings">Earnings</button><button class="ap-tab" data-tab="settings">Settings</button><button class="ap-tab" data-tab="users">Users</button></div>
   <div class="ap-body">
     <div class="tab-pane" id="tab-settings">
       <div class="ap-card">
@@ -235,6 +251,14 @@
             <div class="form-hint">From Google Sheet key: <b>idleShutdownMinutes</b>. Use 0 to disable idle auto-shutdown.</div>
           </div>
         </div>
+      </div>
+      <div class="ap-card">
+        <h4>QR CODE LOGIN</h4>
+        <div class="form-row">
+          <div class="form-group"><label>Enable QR Login</label><select id="setQrEnabled"><option value="1">Yes</option><option value="0">No</option></select></div>
+          <div class="form-group"><label>QR Code Expiry (minutes)</label><input id="setQrExpiryMinutes" type="number" step="1" min="1"></div>
+        </div>
+        <div class="form-hint">When enabled, the lock screen shows a PASSCODE / QR CODE toggle. A generated QR code that isn't scanned &amp; confirmed here within the expiry window is automatically freed up.</div>
       </div>
       <div class="ap-card">
         <h4>TOOLTIP INSTRUCTION</h4>
@@ -274,11 +298,29 @@
     </div>
     <div class="tab-pane" id="tab-earnings"><div class="ap-card"><div class="form-row"><div class="form-group"><label>From Date</label><input type="date" id="dateFrom"></div><div class="form-group"><label>To Date</label><input type="date" id="dateTo"></div><button class="btn-primary" id="filterEarnBtn">FILTER</button></div><div class="pc-toolbar" style="margin-top:10px; margin-bottom:0;"><button class="btn-secondary" id="printFilteredEarnBtn">🖨️ PRINT FILTERED RESULT</button></div></div><div class="earn-stats"><div class="earn-stat"><div class="val" id="statTotal">P0</div><div class="lbl">Total</div></div><div class="earn-stat"><div class="val" id="statSessions">0</div><div class="lbl">Sessions</div></div><div class="earn-stat"><div class="val" id="statAvg">P0</div><div class="lbl">Avg / Session</div></div><div class="earn-stat"><div class="val" id="statBonus">0</div><div class="lbl">Bonuses Given</div></div></div><div style="overflow-x: auto;"><table class="earn-table"><thead><tr><th>Date</th><th>Start</th><th>User</th><th>Amount</th><th>Min</th><th>Bonus</th><th>End</th></tr></thead><tbody id="earnBody"></tbody></table></div><div class="chart-wrap"><canvas id="earnChart"></canvas></div></div>
     <div class="tab-pane" id="tab-users"><div class="ap-card"><h4>USER BONUS LEDGER</h4><div class="pc-toolbar" style="margin-bottom:0;"><button class="btn-primary" id="loadUsersBtn">🔄 LOAD USERS</button><button class="btn-secondary" id="printUsersBtn">🖨️ PRINT USERS</button></div></div><div style="overflow-x: auto;"><table class="user-table"><thead><tr><th>Username</th><th>Total Spent</th><th>Progress to Next Bonus</th><th>Bonuses Earned</th></tr></thead><tbody id="userBody"><tr><td colspan="4" style="text-align:center;">Click "LOAD USERS"</td></tr></tbody></table></div></div>
+    <div class="tab-pane" id="tab-scanqr">
+      <div class="ap-card">
+        <h4>SCAN A PLAYER'S QR CODE</h4>
+        <div class="security-note" id="qrCameraError" style="display:none;"></div>
+        <div class="qr-video-wrap" id="qrCameraWrap" style="display:none;"><video id="qrVideo" playsinline muted autoplay></video></div>
+        <div class="qr-confirm-card" id="qrConfirmCard" style="display:none;">
+          <div class="qr-confirm-row"><span>Amount</span><b id="qrConfirmAmount">—</b></div>
+          <div class="qr-confirm-row"><span>Minutes</span><b id="qrConfirmMinutes">—</b></div>
+          <div class="qr-confirm-row"><span>Username</span><b id="qrConfirmUser">—</b></div>
+          <div class="pc-toolbar" style="margin-top:14px; margin-bottom:0;">
+            <button class="btn-danger" id="qrCancelBtn">✕ CANCEL / RESCAN</button>
+            <button class="btn-success" id="qrConfirmBtn">✔ CONFIRM &amp; START SESSION</button>
+          </div>
+        </div>
+        <div class="form-hint">Point the camera at the player's QR code — it scans automatically and shows a confirm card here. Can't scan it (no camera, bad lighting)? Type the code the player was given instead.</div>
+        <div class="qr-manual-row"><input type="text" id="qrManualInput" placeholder="Type code manually…" maxlength="12" autocomplete="off"><button class="btn-secondary" id="qrLookupBtn">LOOK UP</button></div>
+      </div>
+    </div>
   </div>
 </div>
 <script>
-  let GAS_URL = 'https://script.google.com/macros/s/AKfycbyulgE5R_D8by4DemnT45TYpWm_ndRo2FsvrejV2y8Uy4oQDlo7vyDOzqNCgvUSeBnq/exec';
-  let settings = { businessName: 'Gaming Zone', logoURL: '', rate: 8, adminPIN: '1234', apiKey: 'abc123', bonusEnabled: '0', bonusAmt: 5, bonusThreshold: 100, instruction: 'Type your name here so we can track your sessions and automatically award you bonuses once you reach the spending threshold.', idleShutdownMinutes: 10 };
+  let GAS_URL = 'https://script.google.com/macros/s/AKfycbxQWJTxB1bjY7SvOhDg0af2sXQJtZrKTvSJoJJ7QiJquSSgmy1fSG-8WeK_XrmVvHKe/exec';
+  let settings = { businessName: 'Gaming Zone', logoURL: '', rate: 8, adminPIN: '1234', apiKey: 'abc123', bonusEnabled: '0', bonusAmt: 5, bonusThreshold: 100, instruction: 'Type your name here so we can track your sessions and automatically award you bonuses once you reach the spending threshold.', idleShutdownMinutes: 10, qrEnabled: '1', qrExpiryMinutes: 3 };
   let currentChart = null;
   let cachedAllSessions = [];
   let cachedUserLedger = [];
@@ -293,7 +335,7 @@
   function toast(msg, type='info') { const t=document.getElementById('toast'); t.textContent=msg; t.className=type==='error'?'error':type==='success'?'success':''; t.classList.add('show'); clearTimeout(t._timer); t._timer=setTimeout(()=>t.classList.remove('show'),3200); }
   async function postGAS(action, data={}) { const payload=JSON.stringify({action, apiKey:settings.apiKey,...data}); const encoded=encodeURIComponent(payload); const res=await fetch(GAS_URL+'?payload='+encoded,{method:'GET'}); const text=await res.text(); let json; try{json=JSON.parse(text);}catch(e){throw new Error('Invalid GAS response');} if(json.error)throw new Error(json.error); return json; }
   async function fetchSettingsFromGAS() { try{ const res=await postGAS('getSettings',{}); if(res.settings){ settings={...settings,...res.settings}; settingsFetched=true; return true; } return false; }catch(e){ toast('Cannot fetch settings from GAS','error'); return false; } }
-  function applyUiFromSettings(){ document.getElementById('setBizName').value=settings.businessName||''; document.getElementById('setLogoUrl').value=settings.logoURL||''; document.getElementById('setRate').value=settings.rate||8; document.getElementById('setIdleShutdownMinutes').value=(settings.idleShutdownMinutes ?? 10); document.getElementById('setInstruction').value=settings.instruction||''; document.getElementById('setApiKey').value=settings.apiKey||''; document.getElementById('setGasUrl').value=GAS_URL; document.getElementById('setBonusAmt').value=settings.bonusAmt||5; document.getElementById('setBonusThreshold').value=settings.bonusThreshold||100; document.getElementById('setBonusEnabled').value=settings.bonusEnabled||'0'; }
+  function applyUiFromSettings(){ document.getElementById('setBizName').value=settings.businessName||''; document.getElementById('setLogoUrl').value=settings.logoURL||''; document.getElementById('setRate').value=settings.rate||8; document.getElementById('setIdleShutdownMinutes').value=(settings.idleShutdownMinutes ?? 10); document.getElementById('setInstruction').value=settings.instruction||''; document.getElementById('setApiKey').value=settings.apiKey||''; document.getElementById('setGasUrl').value=GAS_URL; document.getElementById('setBonusAmt').value=settings.bonusAmt||5; document.getElementById('setBonusThreshold').value=settings.bonusThreshold||100; document.getElementById('setBonusEnabled').value=settings.bonusEnabled||'0'; document.getElementById('setQrEnabled').value=String(settings.qrEnabled ?? '1'); document.getElementById('setQrExpiryMinutes').value=(settings.qrExpiryMinutes ?? 3); }
   function populateGenGroupSelect(){ const sel=document.getElementById('genGroup'); sel.innerHTML='<option value="0">ALL (P1–P20)</option>'; for(let i=1;i<=20;i++) sel.innerHTML+=`<option value="${i}">P${i}</option>`; }
   function buildAmountCheckboxes(){ const container=document.getElementById('printAmountsGrid'); container.innerHTML=''; for(let i=1;i<=20;i++){ const label=document.createElement('label'); label.style.cssText='display:inline-flex; align-items:center; gap:6px; background:rgba(0,245,255,0.1); padding:6px 12px; border-radius:30px; cursor:pointer;'; const cb=document.createElement('input'); cb.type='checkbox'; cb.value=i; cb.className='amount-checkbox'; const span=document.createElement('span'); span.textContent=`P${i}`; label.appendChild(cb); label.appendChild(span); container.appendChild(label); } }
   
@@ -518,7 +560,7 @@
   function renderUserTable(users){ const threshold=Number(settings.bonusThreshold)||100; const tbody=document.getElementById('userBody'); if(!users.length){ tbody.innerHTML='<tr><td colspan="4" style="text-align:center;">No named users yet</td></tr>'; return; } const sorted=[...users].sort((a,b)=>(Number(b.TotalSpent)||0)-(Number(a.TotalSpent)||0)); tbody.innerHTML=sorted.map(u=>{ const spent=Number(u.TotalSpent)||0; const progressPercent=(spent%threshold)/threshold*100; return `<tr><td><strong>${u.Username}</strong></td><td>P${spent}</td><td>P${spent%threshold} / P${threshold}<div class="progress-bar"><div class="progress-fill" style="width:${progressPercent}%"></div></div></td><td>${u.BonusesEarned||0}</td></tr>`; }).join(''); }
   async function refreshPasscodes(){ await prefetchAllAdminData(); toast('Inventory refreshed','success'); }
   async function generatePasscodes(){ const qty=parseInt(document.getElementById('genQty').value)||20; const len=parseInt(document.getElementById('genLen').value)||8; const amount=parseInt(document.getElementById('genGroup').value)||0; try{ const res=await postGAS('generateGroupPasscodes',{quantity:qty,length:len,amount}); const lines=Object.entries(res.generated||{}).map(([grp,cnt])=>`P${grp} → ${cnt} codes`).join('\n'); const el=document.getElementById('passList'); el.textContent=lines||`Done — ${res.totalCodes||0} codes written.`; el.style.display='block'; document.getElementById('copyCodesWrap').style.display='block'; toast(`${res.totalCodes} codes generated`,'success'); await refreshPasscodes(); }catch(e){ toast(e.message,'error'); } }
-  async function saveAllSettings(){ const newPin=document.getElementById('setPin').value; const newPin2=document.getElementById('setPin2').value; if(newPin&&newPin!==newPin2) return toast('PINs do not match','error'); const newGasUrl=document.getElementById('setGasUrl').value.trim(); if(newGasUrl&&newGasUrl!==GAS_URL){ GAS_URL=newGasUrl; localStorage.setItem('admin_gas_url',GAS_URL); } const idleMinutes=Math.max(0, Number(document.getElementById('setIdleShutdownMinutes').value)||0); const payload={ businessName:document.getElementById('setBizName').value, logoURL:document.getElementById('setLogoUrl').value, rate:Number(document.getElementById('setRate').value), idleShutdownMinutes:idleMinutes, instruction:document.getElementById('setInstruction').value.trim(), adminPIN:newPin||settings.adminPIN, apiKey:document.getElementById('setApiKey').value||settings.apiKey, bonusEnabled:document.getElementById('setBonusEnabled').value, bonusAmt:Number(document.getElementById('setBonusAmt').value), bonusThreshold:Number(document.getElementById('setBonusThreshold').value) }; try{ await postGAS('saveSettings',payload); settings={...settings,...payload}; adminDataReadyPromise=null; toast('Settings saved','success'); }catch(e){ toast(e.message,'error'); } }
+  async function saveAllSettings(){ const newPin=document.getElementById('setPin').value; const newPin2=document.getElementById('setPin2').value; if(newPin&&newPin!==newPin2) return toast('PINs do not match','error'); const newGasUrl=document.getElementById('setGasUrl').value.trim(); if(newGasUrl&&newGasUrl!==GAS_URL){ GAS_URL=newGasUrl; localStorage.setItem('admin_gas_url',GAS_URL); } const idleMinutes=Math.max(0, Number(document.getElementById('setIdleShutdownMinutes').value)||0); const qrExpiryMinutes=Math.max(1, Number(document.getElementById('setQrExpiryMinutes').value)||3); const payload={ businessName:document.getElementById('setBizName').value, logoURL:document.getElementById('setLogoUrl').value, rate:Number(document.getElementById('setRate').value), idleShutdownMinutes:idleMinutes, instruction:document.getElementById('setInstruction').value.trim(), adminPIN:newPin||settings.adminPIN, apiKey:document.getElementById('setApiKey').value||settings.apiKey, bonusEnabled:document.getElementById('setBonusEnabled').value, bonusAmt:Number(document.getElementById('setBonusAmt').value), bonusThreshold:Number(document.getElementById('setBonusThreshold').value), qrEnabled:document.getElementById('setQrEnabled').value, qrExpiryMinutes:qrExpiryMinutes }; try{ await postGAS('saveSettings',payload); settings={...settings,...payload}; adminDataReadyPromise=null; toast('Settings saved','success'); }catch(e){ toast(e.message,'error'); } }
   
   // PRINT FUNCTION
   async function printSelectedCards() {
@@ -678,8 +720,116 @@
     printViaIframe(buildPrintReport('Users Bonus Ledger', summary, head, body), `Printing ${users.length} user record(s)...`);
   }
 
+  // ── SCAN QR (second login method — see ScrnLck.ahk's QR-CODE LOGIN section) ──
+  // The camera loop below only ever reads a code and looks it up
+  // (getQrSessionInfo, read-only) — approveQrSession only fires once the
+  // owner reviews the confirm card and taps CONFIRM. That tap is the
+  // actual "verifying" step; scanning alone never starts a session.
+  let qrStream = null, qrScanRAF = null, qrCanvas = null, qrCtx = null, qrFoundToken = null;
+
+  async function startQrCamera(){
+    stopQrCamera();
+    resetQrConfirmCard();
+    const errBox = document.getElementById('qrCameraError');
+    const wrap   = document.getElementById('qrCameraWrap');
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      errBox.textContent = '⚠ This browser can\'t access the camera. Use the manual code entry below.';
+      errBox.style.display = 'block';
+      wrap.style.display = 'none';
+      return;
+    }
+    try{
+      qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const video = document.getElementById('qrVideo');
+      video.srcObject = qrStream;
+      await video.play();
+      wrap.style.display = 'block';
+      errBox.style.display = 'none';
+      qrCanvas = qrCanvas || document.createElement('canvas');
+      qrCtx = qrCanvas.getContext('2d', { willReadFrequently: true });
+      qrFoundToken = null;
+      tickQrScan();
+    }catch(e){
+      wrap.style.display = 'none';
+      errBox.textContent = '⚠ Camera unavailable (' + (e.message||e) + '). Use the manual code entry below.';
+      errBox.style.display = 'block';
+    }
+  }
+
+  function stopQrCamera(){
+    if(qrScanRAF) cancelAnimationFrame(qrScanRAF);
+    qrScanRAF = null;
+    if(qrStream){ qrStream.getTracks().forEach(t=>t.stop()); qrStream = null; }
+  }
+
+  function tickQrScan(){
+    const video = document.getElementById('qrVideo');
+    if(video && video.readyState === video.HAVE_ENOUGH_DATA && !qrFoundToken && typeof jsQR === 'function'){
+      qrCanvas.width = video.videoWidth;
+      qrCanvas.height = video.videoHeight;
+      qrCtx.drawImage(video, 0, 0, qrCanvas.width, qrCanvas.height);
+      const imgData = qrCtx.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
+      const result = jsQR(imgData.data, imgData.width, imgData.height);
+      if(result && result.data){
+        qrFoundToken = result.data.trim().toUpperCase();
+        lookUpQrToken(qrFoundToken);
+        return; // pause scanning — resumes via cancelQrLookup() / startQrCamera()
+      }
+    }
+    qrScanRAF = requestAnimationFrame(tickQrScan);
+  }
+
+  async function lookUpQrToken(token){
+    if(!token) return toast('Enter or scan a code first','error');
+    try{
+      const res = await postGAS('getQrSessionInfo', { token });
+      if(res.status !== 'pending'){
+        const msg = res.status==='used' ? 'This code was already used'
+                  : res.status==='expired' ? 'This code has expired'
+                  : res.status==='cancelled' ? 'The player cancelled this code'
+                  : 'This code is not valid';
+        toast(msg, 'error');
+        resetQrConfirmCard();
+        return;
+      }
+      qrFoundToken = token;
+      if(qrScanRAF){ cancelAnimationFrame(qrScanRAF); qrScanRAF = null; }
+      document.getElementById('qrConfirmAmount').textContent = 'P' + res.amount;
+      document.getElementById('qrConfirmMinutes').textContent = res.minutes + ' min';
+      document.getElementById('qrConfirmUser').textContent = res.username || 'NO-NAME';
+      document.getElementById('qrConfirmCard').style.display = 'block';
+      document.getElementById('qrCameraWrap').style.display = 'none';
+    }catch(e){
+      toast(e.message || 'Code not recognized', 'error');
+      resetQrConfirmCard();
+    }
+  }
+
+  async function confirmQrSession(){
+    if(!qrFoundToken) return toast('Nothing to confirm — scan or look up a code first','error');
+    try{
+      const res = await postGAS('approveQrSession', { token: qrFoundToken });
+      toast('✅ Session started' + (res.bonusEarned ? ' — bonus earned!' : ''), 'success');
+      resetQrConfirmCard();
+      startQrCamera();
+    }catch(e){
+      toast(e.message || 'Could not confirm', 'error');
+    }
+  }
+
+  function cancelQrLookup(){
+    resetQrConfirmCard();
+    startQrCamera();
+  }
+
+  function resetQrConfirmCard(){
+    qrFoundToken = null;
+    document.getElementById('qrConfirmCard').style.display = 'none';
+    document.getElementById('qrManualInput').value = '';
+  }
+
   async function attemptAdminLogin(){ const enteredPin=document.getElementById('adminPinField').value.trim(); if(!enteredPin) return toast('Enter Admin PIN','error'); if(!settingsFetched){ const ok=await fetchSettingsFromGAS(); if(!ok) return toast('Cannot retrieve PIN','error'); } if(enteredPin===String(settings.adminPIN)){ document.getElementById('loginScreen').style.display='none'; document.getElementById('adminPanel').style.display='block'; applyUiFromSettings(); buildAmountCheckboxes(); if(adminDataReadyPromise) await adminDataReadyPromise; else await prefetchAllAdminData(); toast('Welcome, Admin','success'); } else toast('Invalid Admin PIN','error'); }
-  function handleLogout(){ document.getElementById('adminPanel').style.display='none'; document.getElementById('loginScreen').style.display='block'; document.getElementById('adminPinField').value=''; toast('Logged out','info'); }
+  function handleLogout(){ stopQrCamera(); document.getElementById('adminPanel').style.display='none'; document.getElementById('loginScreen').style.display='block'; document.getElementById('adminPinField').value=''; toast('Logged out','info'); }
   function setupEventListeners(){
     document.getElementById('adminLoginSubmit').addEventListener('click',attemptAdminLogin);
     document.getElementById('adminPinField').addEventListener('keypress',(e)=>{if(e.key==='Enter')attemptAdminLogin();});
@@ -699,7 +849,11 @@
     document.getElementById('printUsersBtn').addEventListener('click',printUsers);
     document.getElementById('selectAllAmountsBtn').addEventListener('click',()=>{document.querySelectorAll('.amount-checkbox').forEach(cb=>cb.checked=true); toast('All amounts selected','info');});
     document.getElementById('deselectAllAmountsBtn').addEventListener('click',()=>{document.querySelectorAll('.amount-checkbox').forEach(cb=>cb.checked=false); toast('All amounts deselected','info');});
-    document.querySelectorAll('.ap-tab').forEach(btn=>{btn.addEventListener('click',function(){ document.querySelectorAll('.ap-tab').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active')); this.classList.add('active'); const tabId='tab-'+this.dataset.tab; document.getElementById(tabId).classList.add('active'); if(this.dataset.tab==='earnings') renderEarningsTableAndStats(cachedAllSessions,document.getElementById('dateFrom').value,document.getElementById('dateTo').value); if(this.dataset.tab==='users'&&cachedUserLedger.length) renderUserTable(cachedUserLedger); if(this.dataset.tab==='passcodes'&&!pcDataPrefetched) refreshPasscodes(); });});
+    document.getElementById('qrLookupBtn').addEventListener('click',()=>lookUpQrToken(document.getElementById('qrManualInput').value.trim().toUpperCase()));
+    document.getElementById('qrManualInput').addEventListener('keypress',(e)=>{if(e.key==='Enter') lookUpQrToken(document.getElementById('qrManualInput').value.trim().toUpperCase());});
+    document.getElementById('qrConfirmBtn').addEventListener('click',confirmQrSession);
+    document.getElementById('qrCancelBtn').addEventListener('click',cancelQrLookup);
+    document.querySelectorAll('.ap-tab').forEach(btn=>{btn.addEventListener('click',function(){ document.querySelectorAll('.ap-tab').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active')); this.classList.add('active'); const tabId='tab-'+this.dataset.tab; document.getElementById(tabId).classList.add('active'); stopQrCamera(); if(this.dataset.tab==='earnings') renderEarningsTableAndStats(cachedAllSessions,document.getElementById('dateFrom').value,document.getElementById('dateTo').value); if(this.dataset.tab==='users'&&cachedUserLedger.length) renderUserTable(cachedUserLedger); if(this.dataset.tab==='passcodes'&&!pcDataPrefetched) refreshPasscodes(); if(this.dataset.tab==='scanqr') startQrCamera(); });});
   }
   (async function init(){ const storedUrl=localStorage.getItem('admin_gas_url'); if(storedUrl&&storedUrl.includes('script.google.com')) GAS_URL=storedUrl; populateGenGroupSelect(); buildAmountCheckboxes(); document.getElementById('loginScreen').style.display='block'; document.getElementById('adminPanel').style.display='none'; await fetchSettingsFromGAS(); applyUiFromSettings(); setupEventListeners(); adminDataReadyPromise=prefetchAllAdminData({silent:true}).catch(()=>false); })();
 </script>
